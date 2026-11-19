@@ -1,213 +1,179 @@
-# Set 1 · E-Ticketing
+# SET-1 — E-Ticketing
 
-Assigned source [`ssvkotamraju/E-ticketing`](https://github.com/ssvkotamraju/E-ticketing), default branch `main`. [Source lock](app/source.properties) pins [`5a9b500`](https://github.com/ssvkotamraju/E-ticketing/tree/5a9b5004a4031b6006d47e83e037c6d7aeceedbd). Bootstrap clones the pinned source to ignored `app/upstream`. The upstream has no license file, so its sources are fetched on demand. It contains JSP pages and a WAR POM with Servlet 4.0.1, JSP API 2.3.3 and JSTL 1.2. There are no upstream test classes or JDBC integration. A clean build produces `target/LibraryRegistration.war`. Tomcat 9 provides `javax.servlet` compatibility and serves this file as `ROOT.war` at `/`.
+## Before starting
 
-The upstream Dockerfile uses Tomcat 9 and copies `target/*.war`. This set builds from clean source and copies `LibraryRegistration.war` by name. The upstream Compose file references the wrong WAR and an absent SQL initializer.
+**Assigned source** [ssvkotamraju/E-ticketing](https://github.com/ssvkotamraju/E-ticketing), branch `main`.
 
-## Prerequisites and startup
+Install [Git](https://git-scm.com/downloads), [JDK 21](https://adoptium.net/temurin/releases/?version=21), [Maven](https://maven.apache.org/download.cgi), [Jenkins LTS](https://www.jenkins.io/download/), [Docker Desktop](https://www.docker.com/products/docker-desktop/) [Minikube](https://minikube.sigs.k8s.io/docs/start/) and [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/). Use [Windows OpenSSH](https://learn.microsoft.com/windows-server/administration/openssh/openssh_install_firstuse) for EC2.
 
-Install [Git](https://git-scm.com/downloads), [JDK 21](https://adoptium.net/temurin/releases/?version=21), [Maven 3.9](https://maven.apache.org/download.cgi), [Jenkins LTS](https://www.jenkins.io/download/), [Docker Desktop](https://www.docker.com/products/docker-desktop/), [Minikube](https://minikube.sigs.k8s.io/docs/start/), [kubectl](https://kubernetes.io/docs/tasks/tools/) and [Windows OpenSSH Client](https://learn.microsoft.com/windows-server/administration/openssh/openssh_install_firstuse). Docker Desktop includes Compose v2 and Buildx. Use the Linux engine and WSL 2 on Windows.
-
-**Administrator PowerShell**
+Start Docker Desktop in **Linux containers** mode.
+**Administrator PowerShell, any folder**
 ```powershell
 Get-Service *jenkins*
 Start-Service Jenkins
-Get-Service Jenkins
 ```
-If the service name differs, use the **Name** returned by discovery. Complete first-run setup and keep Jenkins authentication enabled.
 
-**PowerShell**
+If the service name differs, use the **Name** shown above. Wait for Docker Desktop.
+**PowerShell, in the folder where you want the Araiza checkout**
 ```powershell
-Start-Process "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe"
-where.exe java
-where.exe mvn
-where.exe git
-where.exe docker
-Get-Command java,mvn,git,docker,kubectl,minikube,ssh | Select-Object Name,Source
-java -version
-mvn -version
-docker info --format '{{.OSType}}'
 docker compose version
-git clone https://github.com/DevXOmar/Araiza.git
-Set-Location Araiza/s1
-Set-ExecutionPolicy -Scope Process Bypass
+git clone --branch lab/nine-set-execution --single-branch https://github.com/DevXOmar/Araiza.git
+cd Araiza\s1
+Set-ExecutionPolicy -Scope Process Bypass -Force
 ```
 
-Wait for `docker info` to report `linux`. Run all local commands in `Araiza/s1`. For a PR preview switch the Araiza checkout to its review branch before entering the directory.
+Keep this PowerShell open for the local steps.
 
-**macOS Terminal**
-```bash
-open -a Docker
-brew services start jenkins-lts
-command -v java mvn git docker
-/usr/libexec/java_home -V
-git clone https://github.com/DevXOmar/Araiza.git
-cd Araiza/s1
-```
-
-Use `curl` for `curl.exe`. The setup equivalents are `bash scripts/setup.sh`, `bash scripts/setup.sh --env-only` and `bash scripts/setup.sh --fetch-only`. Use [PowerShell for macOS](https://learn.microsoft.com/powershell/scripting/install/install-powershell-on-macos) for verification scripts. The Docker and kubectl commands are shared.
-
-## Ports and expected URLs
-
-| Service | Address |
+| Open | URL |
 | --- | --- |
 | Jenkins | `http://localhost:8080/` |
-| Compose | `http://127.0.0.1:80/`  |
+| Compose app | `http://127.0.0.1:80/` |
+| Minikube port-forward | `http://127.0.0.1:8311/` |
 | Nagios | `http://127.0.0.1:8891/nagios/` |
-| Minikube | NodePort `30101` or forwarded `http://127.0.0.1:8311/` |
-| EC2 | `http://PUBLIC_IPV4/` |
+| EC2 app | `http://PUBLIC_IP/` |
 
-## Question 1 — WordPress and MySQL
+## Q1 — Docker — Multi-Container Application
 
-[compose.yaml](compose.yaml) runs the official images. WordPress connects to `db:3306` with a matching database name and non-root user on `eticket-net`. MySQL uses `eticket-db-data` and has no published port. WordPress files use `s1-wp-data`.
-
-**PowerShell**
+Run the ticket booking portal with WordPress and MySQL. [compose.yaml](compose.yaml) sets up `eticket-net`, matching credentials and `eticket-db-data`.
+**PowerShell in Araiza/s1**
 ```powershell
-./scripts/setup.ps1 -EnvOnly
-docker compose config --quiet
+.\scripts\setup.ps1 -EnvOnly
 docker compose pull
 docker compose up -d --wait --wait-timeout 180
 docker compose ps
-docker compose logs --tail=40 web db
+docker compose logs --tail=10 web db
 ```
 
-**Browser** Open `http://127.0.0.1:80/wp-admin/install.php`. Select a language and set site title **E-Ticketing**, a private admin username and a strong password. Sign in, choose **Pages → Add New**, name it **Concert bookings**, enter **Concert seat reservations**, and publish. Open **View Page** to copy its actual local path. Plain permalinks look like `/?page_id=NUMBER`.
+**Browser** Open [http://127.0.0.1:80/wp-admin/install.php](http://127.0.0.1:80/wp-admin/install.php). Install WordPress with site title **E-Ticketing**, choose an admin username, password and email, and sign in. In **Pages → Add New**, create **Concert bookings**. Add a **Shortcode** block containing `[lab_ticket_booking]` and publish. While signed in, reserve seat `A7` and try it again to show **Seat already reserved**.
 
-Insert a **Shortcode** block with `[lab_ticket_booking]`. While signed in reserve seat `A7` and repeat the submission. Expect a booking code, then **Seat already reserved**. The [booking plugin](wordpress/ticket-booking.php) writes each reservation to MySQL where a unique event-and-seat index prevents duplicate reservations.
-
-After initial WordPress setup, scale behind [Nginx](proxy.conf). Only the proxy binds host port 80. Its upstream resolves all `web` replicas using Docker DNS. The replicas share WordPress files and salts.
-
+After setup, scale behind the existing [Nginx proxy](proxy.conf), which keeps host port 80.
+**PowerShell in Araiza/s1**
 ```powershell
 docker compose up -d --no-deps --scale web=2 web
 docker compose ps web proxy
 ```
 
-**PowerShell** Simulate a crash and recreate MySQL without removing the named volume. An HTTP error or temporary timeout is expected during the outage.
-
+Run the first line and refresh to see the outage. Run the last two lines and refresh again.
+**PowerShell in Araiza/s1**
 ```powershell
 docker compose kill db
-curl.exe -i --max-time 8 http://127.0.0.1:80/
 docker compose rm -f db
 docker compose up -d --wait --wait-timeout 180 db
-docker volume inspect eticket-db-data
 ```
 
-**Browser** Reload the published page. **Concert seat reservations** should remain. Sign in and confirm A7 under **Saved seats**. For a DB connection error use `docker compose logs db web`, `docker compose ps` and `docker compose exec web getent hosts db`. Check the generated credentials against the ones used to initialize the volume.
+**Expected** Compose shows the renewed DB as healthy, and seat A7 remains saved under **Saved seats**.
 
-## Question 2 — Jenkins Pipeline
+**Scenario questions**
 
-**Jenkins GUI** Open `http://localhost:8080/`. Under **Manage Jenkins → Plugins → Available plugins**, install Git, GitHub, Pipeline, JUnit and Pipeline Stage View. Under **Manage Jenkins → Tools**, configure Git and name the JDK `JDK21` and Maven `Maven3`. For installed tools, uncheck automatic installation and select the home directory above `bin`. If Git needs an explicit executable, use the path found by `Get-Command git`. Restart Jenkins after system PATH changes.
+**1. What happens to active user cart transactions if the MySQL container crashes while thousands are booking tickets?**<br>Uncommitted bookings roll back, so check whether the seat was saved before retrying.<br><br>
+**2. How can ticket booking history be recovered after complete container deletion?**<br>Recreate MySQL with `eticket-db-data` and the original credentials, or restore a backup if the volume was lost.<br><br>
+**3. Why is a custom Docker network required instead of the default bridge?**<br>The user-defined network provides DNS for `db` and isolates lab services from unrelated containers.<br><br>
+**4. How would you protect sensitive database root passwords from unauthorized access?**<br>Keep database passwords in your private `.env` and give WordPress only the restricted application account.<br><br>
+**5. How would you deploy multiple instances of the E-Ticketing frontend using Docker Compose to balance user load?**<br>After WordPress setup, run `docker compose up -d --no-deps --scale web=2 web` behind the existing proxy on port 80.
 
-Maven runs the test lifecycle. The assigned repository has no test classes. The separate [JUnit project](ci-tests/pom.xml) checks ticket code generation and seat validation. The booking plugin is checked with the browser exercise.
+## Q2 — Jenkins — Java Application Build and Continuous Integration
 
-1. **New Item → s1-pipeline → Pipeline → OK**. Set **Pipeline → Definition → Pipeline script**. Paste [Jenkinsfile](Jenkinsfile), leave **Use Groovy Sandbox** checked, and save.
-2. The baseline Git source is `https://github.com/ssvkotamraju/E-ticketing.git`. The public HTTPS checkout needs no credential. For automatic webhook builds, edit the `SOURCE_URL` and `SOURCE_BRANCH` default values in the pasted script to point to your writable training fork and exact branch, and run once manually to register Git SCM.
-   For a PR preview set the `LAB_BRANCH` default to `lab/nine-set-execution`. Use `main` after merge.
-   For production branch filtering, use an exact branch such as `production` and create it in your fork first.
+Build the assigned Java project and archive `LibraryRegistration.war`.
 
-3. **Configure → Build Triggers**. Enable **Poll SCM** at `H/5 * * * *` for recurring checks, or **GitHub hook trigger for GITScm polling** for push-only builds. Save and click **Build Now** to register Git SCM.
-4. Inspect stages, **Build History → Console Output**, and download `LibraryRegistration.war` from **Artifacts**.
-
-5. Click **Build with Parameters**, enable `FAIL_TEST` and run. The deliberate lab JUnit assertion fails, Jenkins skips WAR build and archival, and **Test Result** shows the failure. Clear `FAIL_TEST` for the next green build.
-
-If using a push trigger, a writable fork is required. In its **Settings → Webhooks → Add webhook**, enter the controller's reachable HTTPS URL plus `/github-webhook/`, select **application/json** and **Just the push event**. Check **Recent Deliveries** and the Jenkins SCM poll log. An upstream repo owner would have to install a webhook on the upstream. Compare a push to the configured branch with a push to a different branch.
-
-**Troubleshooting** Read the first error in Console Output. On Windows confirm that the Pipeline uses `bat` and check the exact Jenkins tool names. If Jenkins needs Docker, inspect **services.msc → Jenkins → Properties → Log On**. Test `docker version` from the actual agent. Use a trusted interactive agent with Docker Desktop access, or configure the service account's Docker access and restart it. A successful interactive PowerShell test only verifies the logged-in user's access.
-
-## Question 3 — Minikube
-
-Apply the provided [Deployment](k8s/deployment.yaml), [Service](k8s/service.yaml) and [namespace](k8s/namespace.yaml). This uses the actual Java image with startup, readiness and liveness probes.
-
-**PowerShell**
+**Jenkins GUI** At [localhost:8080](http://localhost:8080/), install **Pipeline, Git, GitHub, JUnit and Pipeline Stage View** under **Manage Jenkins → Plugins**. Under **Tools**, set **JDK21** and **Maven3** to your JDK and Maven installation folders, one level above `bin`.
+**PowerShell in Araiza/s1**
 ```powershell
-./scripts/setup.ps1
+$job = Get-Content -Raw .\Jenkinsfile
+$job = $job.Replace("'LAB_BRANCH', defaultValue: 'main'", "'LAB_BRANCH', defaultValue: 'lab/nine-set-execution'")
+$job | Set-Clipboard
+```
+
+**Jenkins GUI**
+
+1. **New Item → s1-pipeline → Pipeline → OK**. Under **Configure → Pipeline → Pipeline script**, paste the copied [Jenkinsfile](Jenkinsfile). Keep **Groovy Sandbox** checked.
+2. Under **Build Triggers**, use **Poll SCM** with `H/5 * * * *`.
+3. **Save → Build Now**. Under **Build History**, open **Console Output** and check **Artifacts**.
+4. **Build with Parameters → FAIL_TEST → Build** makes a red JUnit run. Clear `FAIL_TEST` for the next run. The copied script already sets `LAB_BRANCH` to `lab/nine-set-execution`.
+
+For a GitHub push demo, set the job script's `SOURCE_URL` default to your fork, switch the trigger to **GitHub hook trigger for GITScm polling**, and run once. In the fork use **Settings → Webhooks → Add webhook**, a reachable Jenkins HTTPS URL ending in `/github-webhook/`, **application/json**, and **Just the push event**.
+
+**Expected** The green run archives `LibraryRegistration.war` and the red run stops at the intended failure.
+
+**Scenario questions**
+
+**1. How does Jenkins identify compilation errors in the ticketing source code?**<br>Console Output shows Maven's compiler error with the file and line number.<br><br>
+**2. What happens to the pipeline if compilation succeeds but seat-availability unit tests fail?**<br>Jenkins marks the run failed, skips packaging and leaves the JUnit result for review.<br><br>
+**3. Why is Maven preferred over manual JAR downloading for third-party libraries?**<br>Maven uses the POM to download the same pinned libraries and related dependencies on each build.<br><br>
+**4. How can Jenkins be configured to build only when changes are pushed to the production branch?**<br>Set the job's source URL to a writable fork and its exact branch to `production`.<br><br>
+**5. What is the operational difference between Continuous Integration (CI) and Continuous Deployment (CD)?**<br>CI builds and tests changes, while Continuous Deployment automatically releases changes that pass.
+
+## Q3 — Kubernetes — Container Deployment and Auto Scaling
+
+Deploy the Java app with [deployment.yaml](k8s/deployment.yaml) and [service.yaml](k8s/service.yaml), then scale from 2 to 5 replicas.
+**PowerShell in Araiza/s1**
+```powershell
+.\scripts\setup.ps1
 minikube start --driver=docker
-minikube status
 minikube image load araiza-s1:v1
-kubectl --context minikube apply -f k8s/namespace.yaml
-kubectl --context minikube -n araiza-s1 apply -f k8s/deployment.yaml -f k8s/service.yaml
-kubectl --context minikube -n araiza-s1 rollout status deployment/araiza-s1 --timeout=240s
-kubectl --context minikube -n araiza-s1 get 'deployment,pods,svc' -o wide
-kubectl --context minikube -n araiza-s1 get endpointslices -l kubernetes.io/service-name=araiza-s1
-minikube service araiza-s1 -n araiza-s1 --url
 ```
-
-Expect 2 Ready Pods and endpoints. Keep the Minikube service tunnel open if the Docker driver starts one. Use its listed URL, or use port-forward in another terminal.
-
+**PowerShell in Araiza/s1**
 ```powershell
-kubectl --context minikube -n araiza-s1 port-forward service/araiza-s1 8311:8080
+$ns = 'araiza-s1'
+kubectl --context minikube apply -f k8s\namespace.yaml
+kubectl --context minikube -n $ns apply -f k8s\deployment.yaml -f k8s\service.yaml
+kubectl --context minikube -n $ns rollout status deployment/$ns --timeout=240s
+kubectl --context minikube -n $ns get 'deploy,pods,svc'
 ```
 
+Leave this port-forward to the NodePort Service running and open [the app](http://127.0.0.1:8311/).
+**Second PowerShell, any folder**
 ```powershell
-curl.exe -fsS http://127.0.0.1:8311/
-curl.exe -fsS http://127.0.0.1:8311/register.jsp
+kubectl --context minikube -n araiza-s1 port-forward svc/araiza-s1 8311:8080
 ```
 
-**PowerShell** Scale manually to 5, inspect Pod names, delete one and verify that the replacement has a different name. Use a second PowerShell window. If the deleted Pod was selected by port-forward, rerun the forward command.
-
+Back in the first window, scale and delete one Pod. Compare its name with the names after recovery.
+**PowerShell in Araiza/s1**
 ```powershell
-kubectl --context minikube -n araiza-s1 scale deployment/araiza-s1 --replicas=5
-kubectl --context minikube -n araiza-s1 rollout status deployment/araiza-s1 --timeout=240s
-kubectl --context minikube -n araiza-s1 get pods -o wide
-$pod = kubectl --context minikube -n araiza-s1 get pods -l app=araiza-s1 -o 'jsonpath={.items[0].metadata.name}'
-kubectl --context minikube -n araiza-s1 delete pod $pod
-kubectl --context minikube -n araiza-s1 rollout status deployment/araiza-s1 --timeout=240s
-kubectl --context minikube -n araiza-s1 get pods -o wide
+kubectl --context minikube -n $ns scale deployment/$ns --replicas=5
+kubectl --context minikube -n $ns rollout status deployment/$ns --timeout=240s
+$pod = kubectl --context minikube -n $ns get pods -l "app=$ns" -o 'jsonpath={.items[0].metadata.name}'
+kubectl --context minikube -n $ns delete pod $pod
+kubectl --context minikube -n $ns rollout status deployment/$ns --timeout=240s
+kubectl --context minikube -n $ns get pods
 ```
 
-**PowerShell** Roll to the second image, then roll back. The build adds a visible revision label to the same upstream application. Reopen the forward after each rollout and check `http://127.0.0.1:8311/revision/index.txt` for `v2` and then `v1`.
-
+Update to v2, then undo the update. Relaunch the port-forward if its Pod was replaced.
+**PowerShell in Araiza/s1**
 ```powershell
 docker build --target app --build-arg LAB_REVISION=v2 -t araiza-s1:v2 .
 minikube image load araiza-s1:v2
-kubectl --context minikube -n araiza-s1 set image deployment/araiza-s1 web=araiza-s1:v2
-kubectl --context minikube -n araiza-s1 rollout status deployment/araiza-s1 --timeout=240s
-kubectl --context minikube -n araiza-s1 rollout history deployment/araiza-s1
+kubectl --context minikube -n $ns set image deployment/$ns web=araiza-s1:v2
+kubectl --context minikube -n $ns rollout status deployment/$ns --timeout=240s
+kubectl --context minikube -n $ns get deployment $ns -o wide
+kubectl --context minikube -n $ns rollout undo deployment/$ns
+kubectl --context minikube -n $ns rollout status deployment/$ns --timeout=240s
+kubectl --context minikube -n $ns get deployment $ns -o wide
 ```
 
+**Expected** The Java app opens and 5 Pods become Ready with a new Pod name after deletion.
+
+**Scenario questions**
+
+**1. What happens in the cluster when a pod handling ticket checkouts crashes unexpectedly?**<br>New requests go to other Ready Pods while Kubernetes restarts the container or replaces the Pod.<br><br>
+**2. How does the Kubernetes control plane maintain the desired replica count?**<br>The Deployment controller manages ReplicaSets, which reconcile actual replicas to the desired count.<br><br>
+**3. What is the operational difference between manual scaling and Autoscaling?**<br>`kubectl scale` sets a fixed count, while HPA changes it using metrics.<br><br>
+**4. Why is a Kubernetes Service required when pod internal IP addresses change dynamically?**<br>The Service keeps a stable address and routes to Ready Pods as their IPs change.<br><br>
+**5. How can you recover from a failed application update using kubectl rollout undo?**<br>Run `kubectl --context minikube -n araiza-s1 rollout undo deployment/araiza-s1`, wait for rollout status, and confirm `v1` through the Service.
+
+## Q4 — Nagios — Infrastructure and Application Monitoring
+
+Start Nagios with the checks supplied in [lab.cfg](nagios/lab.cfg). Keep the Compose app from Q1 available.
+**PowerShell in Araiza/s1**
 ```powershell
-kubectl --context minikube -n araiza-s1 rollout undo deployment/araiza-s1
-kubectl --context minikube -n araiza-s1 rollout status deployment/araiza-s1 --timeout=240s
+docker compose -f compose.yaml -f nagios/compose.yaml --profile monitoring up -d --build --wait --wait-timeout 180
+docker compose -f compose.yaml -f nagios/compose.yaml --profile monitoring exec -T nagios /opt/nagios/bin/nagios -v /opt/nagios/etc/nagios.cfg
+(Get-Content .env | Select-String '^NAGIOS_PASSWORD=').Line.Split('=', 2)[1]
 ```
 
-**Troubleshooting** Replace a failing image with the correct loaded tag. Check startup logs and last termination reason for a crashing Pod. In a Pending Pod's events look for scheduling errors and resource shortages.
+**Browser** Open [Nagios](http://127.0.0.1:8891/nagios/) as `nagiosadmin` with the password above. Under **Services**, show **Portal HTTP**, **Database TCP**, CPU, memory, disk and uptime. WARNING / CRITICAL are 75% / 90% for CPU and memory, 80% / 95% disk, under 120s / 30s uptime, and 1s / 3s HTTP response time.
 
-```powershell
-$pod = kubectl --context minikube -n araiza-s1 get pods -l app=araiza-s1 -o 'jsonpath={.items[0].metadata.name}'
-kubectl --context minikube -n araiza-s1 describe pod $pod
-kubectl --context minikube -n araiza-s1 logs $pod -c web --tail=60
-kubectl --context minikube -n araiza-s1 logs $pod -c web --previous
-kubectl --context minikube -n araiza-s1 get events --sort-by=.lastTimestamp
-```
-
-## Question 4 — Nagios monitoring
-
-The [Compose overlay](nagios/compose.yaml) applies [host and service definitions](nagios/lab.cfg) for the portal, database TCP port and Docker Linux metrics. The monitoring overlay runs a separate assigned-WAR Tomcat instance for its own HTTP check.  The unprivileged [metrics agent](nagios/metrics.py) reads Linux CPU, memory, disk and uptime. On Docker Desktop these are metrics from the Docker Linux VM and its filesystem. No Docker socket or privileged container is needed.
-
-**PowerShell** Build the Java image and start the monitoring services. For WordPress, complete first-run browser setup before testing the portal.
-
-```powershell
-./scripts/setup.ps1
-docker compose -f compose.yaml -f nagios/compose.yaml --profile monitoring pull nagios metrics
-docker compose -f compose.yaml -f nagios/compose.yaml --profile monitoring up -d --build
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios /opt/nagios/bin/nagios -v /opt/nagios/etc/nagios.cfg
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios sv status nagios
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios python3 /opt/lab/check_lab.py http proxy 80 / 1 3
-```
-
-**Browser** Open `http://127.0.0.1:8891/nagios/`. Use `nagiosadmin` and the password in your local `.env`. Check **Hosts**, **Services** and **Alert History**. CPU and memory use 75% WARNING and 90% CRITICAL. Disk uses 80%/95% used. Uptime warns below 120s and is critical below 30s. HTTP warns at 1s, becomes critical at 3s or on an error status. The dashboard and alert history record state changes. Outbound email is disabled.
-
-**PowerShell** Test both threshold exits using actual sampled CPU data, without running a load generator. Expect return codes 1 and 2.
-
-```powershell
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios python3 /opt/lab/check_lab.py metric metrics cpu 0 101
-$LASTEXITCODE
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios python3 /opt/lab/check_lab.py metric metrics cpu 0 0
-$LASTEXITCODE
-```
-
-**PowerShell and browser** Stop DB, wait for **Database TCP** to reach CRITICAL, restart and wait for OK. Repeat with web and **Portal HTTP**. Give Nagios 30–60 seconds to display the hard state before continuing.
-
+Run these lines individually. After each stop wait for CRITICAL (about a minute), then run its start and show recovery in **Alert History**.
+**PowerShell in Araiza/s1**
 ```powershell
 docker compose stop db
 docker compose start db
@@ -215,139 +181,78 @@ docker compose stop web
 docker compose start web
 ```
 
-If the website loads but Nagios reports no process, check `docker compose -f compose.yaml -f nagios/compose.yaml logs nagios` and the daemon status above. After editing the host definitions, validate before scheduling the change.
+**Expected** Nagios validates with zero errors and records CRITICAL → OK for the database and HTTP checks.
 
+**Scenario questions**
+
+**1. How does Nagios identify high CPU utilization during a traffic surge?**<br>Nagios checks sampled CPU use against 75% WARNING and 90% CRITICAL.<br><br>
+**2. What is the operational difference between a WARNING state and a CRITICAL state?**<br>WARNING signals early degradation, while CRITICAL signals severe usage or a failed service check.<br><br>
+**3. How can Nagios detect an HTTP 500 server error even when the Linux server itself is running?**<br>The active HTTP check inspects the status code and marks HTTP 500 CRITICAL even if the host is up.<br><br>
+**4. What happens to system monitoring if the Nagios monitoring server container fails?**<br>Active checks and alerts stop until Nagios returns, so an independent monitor should watch the Nagios endpoint.<br><br>
+**5. How would you determine if downtime is caused by the Tomcat server, MySQL, or network routing?**<br>Compare Tomcat HTTP and MySQL TCP, then check Compose logs and `getent hosts db` for routing or DNS problems.
+
+## Q5 — AWS — Cloud Deployment using EC2
+
+Deploy the assigned app to Ubuntu EC2.
+
+**Docker Hub** Create a public repo named `araiza-s1` in your account and have a Docker Hub access token ready.
+**PowerShell in Araiza/s1**
 ```powershell
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios /opt/nagios/bin/nagios -v /opt/nagios/etc/nagios.cfg
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios sv restart nagios
-```
-
-## Question 5 — AWS Academy EC2
-
-**AWS console** [AWS Academy](https://awsacademy.instructure.com/) → **Login → Courses → Lab → Module → Launch AWS → Start Lab → AWS → EC2 → Launch Instance**. Choose **Ubuntu Server 24.04 LTS x86_64**, a lab-approved instance type, and at least 12–16 GiB of gp3 if allowed. Create or select a personal `.pem` key pair. Enable public IPv4 in a subnet with an internet gateway route.
-
-Allow inbound TCP 22 from **My IP** (/32) and TCP **80** from the examiner's IP or permitted audience.  Keep DB ports closed. Use only synthetic data. If a small VM runs out of build memory, use a lab-approved larger instance.
-
-**PowerShell** Create a public Docker Hub repo named `araiza-s1`. Log in with an access token at the prompt and publish the image. Keep the token private.
-
-```powershell
-./scripts/setup.ps1 -FetchOnly
-$hubUser = Read-Host 'Docker Hub username'
-docker login --username $hubUser
-docker buildx build --platform linux/amd64,linux/arm64 --target app -t "${hubUser}/araiza-s1:v1" --push .
+.\scripts\setup.ps1 -FetchOnly
+$hub = Read-Host 'Docker Hub username'
+docker login --username $hub
+docker buildx build --platform linux/amd64 --target app -t "${hub}/araiza-s1:v1" --push .
 docker logout
 ```
 
-For Jenkins-based publishing, add **Username with password** under **Manage Jenkins → Credentials → System → Global → Add Credentials**. Use your Docker Hub username, access token, and ID `dockerhub-creds` for a credentials binding. The supplied CI job handles Maven. The manual publish above is sufficient for EC2.
-
-**PowerShell** Supply the actual downloaded key path and instance IP.
-
+**AWS console** [awsacademy.instructure.com](https://awsacademy.instructure.com/) → **Courses → Lab → Module → Launch AWS → Start Lab → AWS → EC2 → Launch Instance**. Choose **Ubuntu Server 24.04 LTS x86_64**, a lab-approved x86 instance, about **16 GiB gp3** if allowed, **public IPv4**, and a `.pem` key pair. Inbound rules are **TCP 22 from My IP** and **TCP 80 from your or the examiner's IP**.
+**PowerShell in Araiza/s1**
 ```powershell
-$key = (Resolve-Path "$env:USERPROFILE\Downloads\YOUR_KEY.pem").Path
+$pem = Read-Host 'Full path to your downloaded .pem file'
 $ec2 = Read-Host 'EC2 public IPv4'
-ssh -i "$key" "ubuntu@$ec2"
+ssh -i ($pem.Trim('"')) "ubuntu@$ec2"
 ```
-
-If OpenSSH rejects the key ACL, in the key's **Properties → Security → Advanced** disable inheritance and retain read access for your Windows user. On macOS use `chmod 400 ~/Downloads/YOUR_KEY.pem` and `ssh -i ~/Downloads/YOUR_KEY.pem ubuntu@PUBLIC_IPV4`.
-
-**Ubuntu EC2 terminal** The script fetches the assigned source using its pinned commit. To run from the PR, add `--branch lab/nine-set-execution` to the Araiza clone command.
-
+**Ubuntu EC2 terminal, in the Ubuntu home directory**
 ```bash
 sudo apt-get update
 sudo apt-get install -y git
-git clone https://github.com/DevXOmar/Araiza.git
+git clone --branch lab/nine-set-execution --single-branch https://github.com/DevXOmar/Araiza.git
 cd Araiza/s1
-bash aws/deploy.sh YOUR_DOCKERHUB_USER/araiza-s1:v1
+```
+
+[deploy.sh](aws/deploy.sh) builds the assigned WAR and runs the Docker Hub image on port 80.
+**Ubuntu EC2 terminal, in Araiza/s1**
+```bash
+read -rp 'Docker Hub username: ' hub
+bash aws/deploy.sh "$hub/araiza-s1:v1"
 curl -fsS http://127.0.0.1/
 ```
 
-[deploy.sh](aws/deploy.sh) installs Docker and Git, builds the pinned WAR locally for evidence, then pulls your published Tomcat image, and maps EC2 port 80 to container port 8080. Docker starts at boot and the container has an `unless-stopped` policy.
+**Browser** Replace `PUBLIC_IP` in `http://PUBLIC_IP/` with the EC2 address. If it fails, run `sudo docker logs --tail=60 araiza-s1-ec2` in the Ubuntu SSH window and check the inbound rule.
 
-**Ubuntu EC2 terminal**
-```bash
-sudo systemctl status docker --no-pager
-sudo docker ps -a --filter name=araiza-s1-ec2
-sudo docker port araiza-s1-ec2
-sudo docker logs --tail=80 araiza-s1-ec2
-sudo ss -lnt
-```
+**Expected** Your application opens at the public address.
 
-**Laptop browser** Open `http://PUBLIC_IPV4/`.  If local curl works and external access times out, check public IPv4, the app port in the attached security group, subnet route and `sudo ufw status` in Ubuntu. If local curl fails, check listeners and server logs. For 404, check the context and whether `ROOT.war` deployed.
+**Scenario questions**
 
-## Scenario answers
+**1. What AWS Security Group misconfigurations could make the ticketing application inaccessible in a browser?**<br>Confirm the security group allows TCP 80 from your IP and EC2 maps 80 to Tomcat's 8080.<br><br>
+**2. Why should SSH access (Port 22) be restricted to trusted IP addresses?**<br>Limit port 22 to trusted addresses to reduce exposure to scanning and login attempts.<br><br>
+**3. What happens to active customer sessions if the Tomcat service stops on the EC2 instance?**<br>In-flight requests fail and in-memory sessions may be lost until Tomcat returns.<br><br>
+**4. How can application availability be improved beyond a single EC2 instance?**<br>Run independent instances in different Availability Zones behind health checks and use durable shared data, backups, and a recovery plan.<br><br>
+**5. Why would an Application Load Balancer and multiple EC2 instances be superior for ticket sales compared to a single instance?**<br>An ALB distributes ticket traffic across healthy instances, routes around unhealthy targets and supports capacity growth during a sale.
 
-### Question 1
+## Troubleshooting and cleanup
 
-1. InnoDB rolls back uncommitted reservations. Committed seats survive. If the client lost the acknowledgment, look up the seat before retrying and let the unique seat constraint prevent duplicates.
-2. Recreate MySQL with `eticket-db-data` and the original credentials. If that volume is lost, restore a database backup into a new instance.
-3. The user-defined network provides DNS for `db` and isolates lab services from unrelated containers.
-4. Generate passwords outside Git, keep `.env` private, and use the restricted WordPress account. Leave port 3306 unpublished. Use managed secrets for a shared deployment.
-5. Use `docker compose up -d --no-deps --scale web=2 web` after WordPress setup. Nginx owns port 80 and balances requests to replicas using shared files and MySQL.
+- **Port busy** Run `Get-NetTCPConnection -State Listen -LocalPort 8080,80,8311,8891 -ErrorAction SilentlyContinue`. For a Compose port conflict, change `WEB_PORT` or `NAGIOS_PORT` in your local `.env` and use that port in the browser.
+- **Container unhealthy** Run `docker compose logs --tail=40 web db`. For Jenkins errors, check **Console Output** and the names `JDK21` and `Maven3`.
 
-### Question 2
-
-1. Open Jenkins Console Output. Maven reports the compiler error with its source file and line and returns a failing exit status.
-2. Surefire exits nonzero. Jenkins marks the job failed and skips packaging and archiving. The controlled test flag demonstrates this path.
-3. The POM records dependency versions. Maven resolves them and their transitive dependencies reproducibly.
-4. Create `production` on a writable fork. Set the source URL and exact branch to that fork and `production`, and use the push webhook or Poll SCM.
-5. CI builds and tests changes. Continuous Deployment releases each qualifying change automatically.
-
-### Question 3
-
-1. The Service drops the unready endpoint. A request in flight may fail. The kubelet restarts a crashed container and the ReplicaSet replaces a deleted Pod.
-2. The Deployment controller manages ReplicaSets, which reconcile actual replicas to the desired count.
-3. `kubectl scale` sets a fixed desired count. An HPA adjusts it using metrics within configured bounds.
-4. The Service IP and DNS remain stable. The Service sends requests to Ready endpoints selected by label.
-5. Run `kubectl --context minikube -n araiza-s1 rollout undo deployment/araiza-s1`, wait for rollout status, and confirm `v1` through the Service.
-
-### Question 4
-
-1. The agent samples CPU counters twice. Nagios compares the measured busy percentage with the configured 75% and 90% thresholds.
-2. WARNING means the first threshold was exceeded. CRITICAL means the higher threshold or an availability condition was reached.
-3. The active HTTP check inspects the status code and marks HTTP 500 CRITICAL even if the host is up.
-4. Checks, dashboard updates and alert processing stop. An external monitor can detect that the Nagios endpoint is down.
-5. Compare the named Tomcat HTTP, WordPress HTTP, and MySQL TCP services. Use Compose logs and `getent hosts db` inside the respective container to isolate DNS or networking.
-
-### Question 5
-
-1. Check TCP 80 on the instance's actual security group and source CIDR. Verify public IPv4 and that Docker maps 80 to Tomcat's 8080.
-2. Limit port 22 to trusted addresses to reduce exposure to scanning and login attempts.
-3. Requests fail until Tomcat is back. Sessions held in memory can be lost, while committed external data remains.
-4. Run independent instances in different Availability Zones behind health checks and use durable shared data, backups, and a recovery plan.
-5. An ALB distributes ticket traffic across healthy instances, routes around unhealthy targets and supports capacity growth during a sale.
-
-## Common failures and fixes
-
-- **Port in use.** In PowerShell, run `Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 8080,80,8891,8311 }`. Identify the PID with `Get-Process -Id PID` after replacing PID. For Docker use `docker ps --format "table {{.Names}}	{{.Ports}}"`. On macOS use `lsof -nP -iTCP -sTCP:LISTEN`. Change the matching local port in `.env` where permitted.
-- **Missing WAR.** Run `./scripts/setup.ps1 -FetchOnly` and `mvn -B -ntp -f app/upstream/pom.xml clean test package`. Expect `app/upstream/target/LibraryRegistration.war`. For failed dependency resolution use `mvn -U -e -f app/upstream/pom.xml clean package` and inspect the failing repository or proxy.
-- **Engine inactive.** Check `docker context ls` and `docker version`. Wait for the Linux engine. Check permission under the Jenkins agent user separately.
-- **Database unhealthy.** Run `docker compose ps` and `docker compose logs --tail=80 web db`. Initialization uses credentials from the first boot of the named volume. Restore the original `.env` or rotate the database account explicitly.
-- **No Nagios status.** Verify daemon status and config, then wait for the next active check. Include both Compose files when inspecting monitoring.
-
-## Verify and clean up
-
-**PowerShell** Run `./scripts/setup.ps1` first. Complete WordPress setup and replace NUMBER with your published page ID or supply its actual local path.
-
+Stop the port-forward with Ctrl+C. The cleanup command keeps your data volumes.
+**PowerShell in Araiza/s1**
 ```powershell
-./scripts/verify.ps1 -WordPressQuery '/?page_id=NUMBER' -WordPressMarker 'Concert seat reservations' -RecreateDatabase -Kubernetes
+.\scripts\cleanup.ps1 -Kubernetes
 ```
 
-Omit `-RecreateDatabase` to avoid restarting the DB. Omit `-Kubernetes` to skip its checks. For Kubernetes only use `./k8s/verify.ps1`. The script validates endpoint selection, root and detail HTTP, scaling, Pod replacement, update and rollback through port-forward.
+End the AWS lab and stop or terminate your EC2 instance when done.
 
-Once finished, stop port-forwards with Ctrl+C and remove this set's Compose containers and Kubernetes namespace.
+### macOS startup
 
-```powershell
-./scripts/cleanup.ps1 -Kubernetes
-```
-
-On macOS use `pwsh -File scripts/cleanup.ps1 -Kubernetes`. Cleanup leaves the database volumes, WordPress files, Redis data and `.env` wherever present. Stop any webhook tunnel and disable the practice webhook. In AWS, stop for later use or terminate the instance when evidence is saved. Release lab-only Elastic IPs and retained disks as allowed, then end the Academy lab.
-
-## Evidence checklist
-
-| Exercise | Capture |
-| --- | --- |
-| Containers Q1 | Working page and health, saved record before and after DB replacement. |
-| Jenkins Q2 | Console phases, branch or trigger and archived `LibraryRegistration.war` with red and green runs. |
-| Minikube Q3 | 2 and 5 Ready replicas, endpoints, a new Pod name and HTTP at v2 and restored v1. |
-| Nagios Q4 | Verified configuration, active HTTP and DB services, CPU/memory/disk/uptime, CRITICAL and recovery. |
-| EC2 Q5 | Public IPv4, matching inbound TCP 80, local curl and external browser. |
+In Terminal, run `open -a Docker` and `brew services start jenkins-lts` if installed via Homebrew. Clone the same branch, use `cd Araiza/s1`, `bash scripts/setup.sh` and `curl`. The Docker, Minikube and kubectl commands are the same.

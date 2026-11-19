@@ -1,214 +1,159 @@
-# Set 7 · Sports Management System
+# SET-7 — Sports Management System
 
-Assigned source [`sarasrija/SportSystem`](https://github.com/sarasrija/SportSystem), default branch `main`. [Source lock](app/source.properties) pins [`9ba843f`](https://github.com/sarasrija/SportSystem/tree/9ba843f1deafbb77222f6b75c39a89d263ed4f6a). Bootstrap clones the pinned source to ignored `app/upstream`. The upstream has no license file, so its sources are fetched on demand. It contains JSP pages and a WAR POM with Servlet 4.0.1 and JUnit 4.13.1. There are no upstream test classes or JDBC integration. A clean build produces `target/sportssystem.war`. Tomcat 9 provides `javax.servlet` compatibility and serves this file as `ROOT.war` at `/`.
+## Before starting
 
-The upstream has no Dockerfile. This set builds the actual Maven WAR in a multi-stage Dockerfile. The upstream registration form points to a servlet absent from its source. Verify the Java home and schedule pages separately from the Flask exercise.
+**Assigned source** [sarasrija/SportSystem](https://github.com/sarasrija/SportSystem), branch `main`.
 
-## Prerequisites and startup
+Install [Git](https://git-scm.com/downloads), [JDK 21](https://adoptium.net/temurin/releases/?version=21), [Maven](https://maven.apache.org/download.cgi), [Jenkins LTS](https://www.jenkins.io/download/), [Docker Desktop](https://www.docker.com/products/docker-desktop/) [Minikube](https://minikube.sigs.k8s.io/docs/start/) and [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl-windows/). Use [Windows OpenSSH](https://learn.microsoft.com/windows-server/administration/openssh/openssh_install_firstuse) for EC2.
 
-Install [Git](https://git-scm.com/downloads), [JDK 21](https://adoptium.net/temurin/releases/?version=21), [Maven 3.9](https://maven.apache.org/download.cgi), [Jenkins LTS](https://www.jenkins.io/download/), [Docker Desktop](https://www.docker.com/products/docker-desktop/), [Minikube](https://minikube.sigs.k8s.io/docs/start/), [kubectl](https://kubernetes.io/docs/tasks/tools/) and [Windows OpenSSH Client](https://learn.microsoft.com/windows-server/administration/openssh/openssh_install_firstuse). Docker Desktop includes Compose v2 and Buildx. Use the Linux engine and WSL 2 on Windows.
-
-**Administrator PowerShell**
+Start Docker Desktop in **Linux containers** mode.
+**Administrator PowerShell, any folder**
 ```powershell
 Get-Service *jenkins*
 Start-Service Jenkins
-Get-Service Jenkins
 ```
-If the service name differs, use the **Name** returned by discovery. Complete first-run setup and keep Jenkins authentication enabled.
 
-**PowerShell**
+If the service name differs, use the **Name** shown above. Wait for Docker Desktop.
+**PowerShell, in the folder where you want the Araiza checkout**
 ```powershell
-Start-Process "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe"
-where.exe java
-where.exe mvn
-where.exe git
-where.exe docker
-Get-Command java,mvn,git,docker,kubectl,minikube,ssh | Select-Object Name,Source
-java -version
-mvn -version
-docker info --format '{{.OSType}}'
 docker compose version
-git clone https://github.com/DevXOmar/Araiza.git
-Set-Location Araiza/s7
-Set-ExecutionPolicy -Scope Process Bypass
+git clone --branch lab/nine-set-execution --single-branch https://github.com/DevXOmar/Araiza.git
+cd Araiza\s7
+Set-ExecutionPolicy -Scope Process Bypass -Force
 ```
 
-Wait for `docker info` to report `linux`. Run all local commands in `Araiza/s7`. For a PR preview switch the Araiza checkout to its review branch before entering the directory.
+Keep this PowerShell open for the local steps.
 
-**macOS Terminal**
-```bash
-open -a Docker
-brew services start jenkins-lts
-command -v java mvn git docker
-/usr/libexec/java_home -V
-git clone https://github.com/DevXOmar/Araiza.git
-cd Araiza/s7
-```
-
-Use `curl` for `curl.exe`. The setup equivalents are `bash scripts/setup.sh`, `bash scripts/setup.sh --env-only` and `bash scripts/setup.sh --fetch-only`. Use [PowerShell for macOS](https://learn.microsoft.com/powershell/scripting/install/install-powershell-on-macos) for verification scripts. The Docker and kubectl commands are shared.
-
-## Ports and expected URLs
-
-| Service | Address |
+| Open | URL |
 | --- | --- |
 | Jenkins | `http://localhost:8080/` |
-| Compose | `http://127.0.0.1:8187/`  |
+| Compose app | `http://127.0.0.1:8187/` |
+| Minikube port-forward | `http://127.0.0.1:8317/` |
 | Nagios | `http://127.0.0.1:8897/nagios/` |
-| Minikube | NodePort `30107` or forwarded `http://127.0.0.1:8317/` |
-| EC2 | `http://PUBLIC_IPV4:8080/` |
+| EC2 app | `http://PUBLIC_IP:8080/` |
 
-## Question 1 — Jenkins Scripted Pipeline
+## Q1 — Jenkins — Scripted Pipeline & Build Triggers
 
-**Jenkins GUI** Open `http://localhost:8080/`. Under **Manage Jenkins → Plugins → Available plugins**, install Git, GitHub, Pipeline, JUnit and Pipeline Stage View. Under **Manage Jenkins → Tools**, configure Git and name the JDK `JDK21` and Maven `Maven3`. For installed tools, uncheck automatic installation and select the home directory above `bin`. If Git needs an explicit executable, use the path found by `Get-Command git`. Restart Jenkins after system PATH changes.
+Build the assigned Java project and archive `sportssystem.war`.
 
-Maven runs the test lifecycle. The assigned repository has no test classes. The console may show **No tests to run**. Capture that output alongside the WAR.
-
-1. **New Item → s7-pipeline → Pipeline → OK**. Set **Pipeline → Definition → Pipeline script**. Paste [Jenkinsfile](Jenkinsfile), leave **Use Groovy Sandbox** checked, and save.
-2. The baseline Git source is `https://github.com/sarasrija/SportSystem.git`. The public HTTPS checkout needs no credential. For automatic webhook builds, edit the `SOURCE_URL` and `SOURCE_BRANCH` default values in the pasted script to point to your writable training fork and exact branch, and run once manually to register Git SCM.
-
-3. **Configure → Build Triggers**. Enable **Poll SCM** at `H/5 * * * *` for recurring checks, or **GitHub hook trigger for GITScm polling** for push-only builds. Save and click **Build Now** to register Git SCM.
-4. Inspect stages, **Build History → Console Output**, and download `sportssystem.war` from **Artifacts**.
-
-The Scripted Pipeline uses `node { }` for agent allocation and `tool` for Maven and JDK. `deleteDir()` clears the workspace before checkout. Maven then runs clean, compile and package. The trigger checkboxes are set in the Jenkins GUI.
-
-If using a push trigger, a writable fork is required. In its **Settings → Webhooks → Add webhook**, enter the controller's reachable HTTPS URL plus `/github-webhook/`, select **application/json** and **Just the push event**. Check **Recent Deliveries** and the Jenkins SCM poll log. An upstream repo owner would have to install a webhook on the upstream. Compare a push to the configured branch with a push to a different branch.
-
-**Troubleshooting** Read the first error in Console Output. On Windows confirm that the Pipeline uses `bat` and check the exact Jenkins tool names. If Jenkins needs Docker, inspect **services.msc → Jenkins → Properties → Log On**. Test `docker version` from the actual agent. Use a trusted interactive agent with Docker Desktop access, or configure the service account's Docker access and restart it. A successful interactive PowerShell test only verifies the logged-in user's access.
-
-## Question 2 — AWS Academy EC2
-
-**AWS console** [AWS Academy](https://awsacademy.instructure.com/) → **Login → Courses → Lab → Module → Launch AWS → Start Lab → AWS → EC2 → Launch Instance**. Choose **Ubuntu Server 24.04 LTS x86_64**, a lab-approved instance type, and at least 12–16 GiB of gp3 if allowed. Create or select a personal `.pem` key pair. Enable public IPv4 in a subnet with an internet gateway route.
-
-Allow inbound TCP 22 from **My IP** (/32) and TCP **8080** from the examiner's IP or permitted audience.  Keep DB ports closed. Use only synthetic data. If a small VM runs out of build memory, use a lab-approved larger instance.
-
-**PowerShell** Supply the actual downloaded key path and instance IP.
-
+**Jenkins GUI** At [localhost:8080](http://localhost:8080/), install **Pipeline, Git, GitHub and Pipeline Stage View** under **Manage Jenkins → Plugins**. Under **Tools**, set **JDK21** and **Maven3** to your JDK and Maven installation folders, one level above `bin`.
+**PowerShell in Araiza/s7**
 ```powershell
-$key = (Resolve-Path "$env:USERPROFILE\Downloads\YOUR_KEY.pem").Path
-$ec2 = Read-Host 'EC2 public IPv4'
-ssh -i "$key" "ubuntu@$ec2"
+Get-Content -Raw .\Jenkinsfile | Set-Clipboard
 ```
 
-If OpenSSH rejects the key ACL, in the key's **Properties → Security → Advanced** disable inheritance and retain read access for your Windows user. On macOS use `chmod 400 ~/Downloads/YOUR_KEY.pem` and `ssh -i ~/Downloads/YOUR_KEY.pem ubuntu@PUBLIC_IPV4`.
+**Jenkins GUI**
 
-**Ubuntu EC2 terminal** The script fetches the assigned source using its pinned commit. To run from the PR, add `--branch lab/nine-set-execution` to the Araiza clone command.
+1. **New Item → s7-pipeline → Pipeline → OK**. Under **Configure → Pipeline → Pipeline script**, paste the copied [Jenkinsfile](Jenkinsfile). Keep **Groovy Sandbox** checked.
+2. Under **Build Triggers**, use **Poll SCM** with `H/5 * * * *`.
+3. **Save → Build Now**. Under **Build History**, open **Console Output** and check **Artifacts**.
+4. To show a red run, use **Build with Parameters**, set `SOURCE_BRANCH` to `no-such-lab-branch`, build once, then restore `main`.
 
+For a GitHub push demo, set the job script's `SOURCE_URL` default to your fork, switch the trigger to **GitHub hook trigger for GITScm polling**, and run once. In the fork use **Settings → Webhooks → Add webhook**, a reachable Jenkins HTTPS URL ending in `/github-webhook/`, **application/json**, and **Just the push event**.
+
+**Expected** Jenkins archives `sportssystem.war` from a successful run and shows each stage in Console Output.
+
+**Scenario questions**
+
+**1. Your manager asks you to clean the workspace before building—which stage or command in the pipeline script takes care of it?**<br>The Clean workspace stage calls `deleteDir()` before Git checkout.<br><br>
+**2. If Maven is not configured globally in Jenkins, which section of the pipeline script will fail first?**<br>The `tool name: 'Maven3', type: 'maven'` step fails when no tool by that name is configured.<br><br>
+**3. Instead of running nightly builds, you want this pipeline to trigger only when GitHub changes occur—where will you configure this trigger?**<br>In **Configure → Build Triggers**, enable **GitHub hook trigger for GITScm polling** and turn off periodic polling.<br><br>
+**4. If you replace mvn clean with mvn compile, what difference will it make to the project build output?**<br>`compile` compiles source into `target`, while `clean` deletes previous output.<br><br>
+**5. What is the difference between polling and webhook triggers in Jenkins?**<br>Poll SCM checks Git on a schedule, while a webhook asks Jenkins to check when a push occurs.
+
+## Q2 — AWS — Cloud Deployment using EC2
+
+Deploy the assigned app to Ubuntu EC2.
+
+**AWS console** [awsacademy.instructure.com](https://awsacademy.instructure.com/) → **Courses → Lab → Module → Launch AWS → Start Lab → AWS → EC2 → Launch Instance**. Choose **Ubuntu Server 24.04 LTS x86_64**, a lab-approved x86 instance, about **16 GiB gp3** if allowed, **public IPv4**, and a `.pem` key pair. Inbound rules are **TCP 22 from My IP** and **TCP 8080 from your or the examiner's IP**.
+**PowerShell in Araiza/s7**
+```powershell
+$pem = Read-Host 'Full path to your downloaded .pem file'
+$ec2 = Read-Host 'EC2 public IPv4'
+ssh -i ($pem.Trim('"')) "ubuntu@$ec2"
+```
+**Ubuntu EC2 terminal, in the Ubuntu home directory**
 ```bash
 sudo apt-get update
 sudo apt-get install -y git
-git clone https://github.com/DevXOmar/Araiza.git
+git clone --branch lab/nine-set-execution --single-branch https://github.com/DevXOmar/Araiza.git
 cd Araiza/s7
+```
+
+[deploy.sh](aws/deploy.sh) fetches the Java source, builds the WAR and starts Tomcat on port 8080.
+**Ubuntu EC2 terminal, in Araiza/s7**
+```bash
 bash aws/deploy.sh
 curl -fsS http://127.0.0.1:8080/
 ```
 
-[deploy.sh](aws/deploy.sh) installs Java 21 and Maven, verifies the Apache Tomcat 9 archive checksum, builds `sportssystem.war` and places it at `/opt/araiza-s7-tomcat/webapps/ROOT.war`. The enabled systemd unit starts Tomcat at boot. The script also installs and enables Docker for the sports exercise.
+After reboot, confirm Tomcat starts again with `systemctl is-enabled araiza-s7-tomcat` from Ubuntu.
 
-**Ubuntu EC2 terminal**
-```bash
-sudo systemctl is-enabled araiza-s7-tomcat
-sudo systemctl status araiza-s7-tomcat --no-pager
-sudo journalctl -u araiza-s7-tomcat -n 80 --no-pager
-ls -l /opt/araiza-s7-tomcat/webapps
-sudo ss -lnt
-```
+**Browser** Replace `PUBLIC_IP` in `http://PUBLIC_IP:8080/` with the EC2 address. If it fails, run `sudo journalctl -u araiza-s7-tomcat -n 60 --no-pager` in the Ubuntu SSH window and check the inbound rule.
 
-**Laptop browser** Open `http://PUBLIC_IPV4:8080/`.  If local curl works and external access times out, check public IPv4, the app port in the attached security group, subnet route and `sudo ufw status` in Ubuntu. If local curl fails, check listeners and server logs. For 404, check the context and whether `ROOT.war` deployed.
+**Expected** Your application opens at the public address.
 
-## Question 3 — Minikube and Nagios
+**Scenario questions**
 
-Apply the provided [Deployment](k8s/deployment.yaml), [Service](k8s/service.yaml) and [namespace](k8s/namespace.yaml). This uses the actual Java image with startup, readiness and liveness probes.
+**1. You built a Maven project on EC2, and a .war file generated inside target/. Where will you place the .war file for Tomcat execution, and why?**<br>Put `sportssystem.war` in `/opt/araiza-s7-tomcat/webapps/ROOT.war` so Tomcat serves it at `/`.<br><br>
+**2. Your Maven web app is deployed to Tomcat on EC2, but accessing it via browser gives a 404 error. What configuration or path issues will you check?**<br>Check the Tomcat logs and deployment paths, and browse to `/` or `/schedule.jsp` for `ROOT.war`.<br><br>
+**3. You have deployed your web app on EC2 successfully, but after restarting your instance, the public IP changed and the app is not opening. What AWS feature helps avoid this issue?**<br>Associate an Elastic IP if AWS Academy permits it.<br><br>
+**4. Your Maven application needs external dependencies during build, but EC2 has no internet. What AWS service or change allows the EC2 instance to download dependencies securely?**<br>Use a NAT gateway for a private subnet or a public IP and internet gateway route for a public subnet.<br><br>
+**5. What command should you run to ensure a web server service auto-starts on EC2 instance boot?**<br>On Ubuntu run `sudo systemctl enable --now araiza-s7-tomcat` and confirm `systemctl is-enabled araiza-s7-tomcat`.
 
-**PowerShell**
+## Q3 — Kubernetes & Nagios — Minikube Pods & Infrastructure Monitoring
+
+Deploy the Java app with [deployment.yaml](k8s/deployment.yaml) and [service.yaml](k8s/service.yaml), then scale from 2 to 4 replicas.
+**PowerShell in Araiza/s7**
 ```powershell
-./scripts/setup.ps1
+.\scripts\setup.ps1
 minikube start --driver=docker
-minikube status
 minikube image load araiza-s7:v1
-kubectl --context minikube apply -f k8s/namespace.yaml
-kubectl --context minikube -n araiza-s7 apply -f k8s/deployment.yaml -f k8s/service.yaml
-kubectl --context minikube -n araiza-s7 rollout status deployment/araiza-s7 --timeout=240s
-kubectl --context minikube -n araiza-s7 get 'deployment,pods,svc' -o wide
-kubectl --context minikube -n araiza-s7 get endpointslices -l kubernetes.io/service-name=araiza-s7
-minikube service araiza-s7 -n araiza-s7 --url
 ```
-
-Expect 2 Ready Pods and endpoints. Keep the Minikube service tunnel open if the Docker driver starts one. Use its listed URL, or use port-forward in another terminal.
-
+**PowerShell in Araiza/s7**
 ```powershell
-kubectl --context minikube -n araiza-s7 port-forward service/araiza-s7 8317:8080
+$ns = 'araiza-s7'
+kubectl --context minikube apply -f k8s\namespace.yaml
+kubectl --context minikube -n $ns apply -f k8s\deployment.yaml -f k8s\service.yaml
+kubectl --context minikube -n $ns rollout status deployment/$ns --timeout=240s
+kubectl --context minikube -n $ns get 'deploy,pods,svc'
 ```
 
+Leave this port-forward to the NodePort Service running and open [the app](http://127.0.0.1:8317/).
+**Second PowerShell, any folder**
 ```powershell
-curl.exe -fsS http://127.0.0.1:8317/
-curl.exe -fsS http://127.0.0.1:8317/schedule.jsp
+kubectl --context minikube -n araiza-s7 port-forward svc/araiza-s7 8317:8080
 ```
 
-**PowerShell** Scale manually to 4, inspect Pod names, delete one and verify that the replacement has a different name. Use a second PowerShell window. If the deleted Pod was selected by port-forward, rerun the forward command.
-
+Back in the first window, scale and delete one Pod. Compare its name with the names after recovery.
+**PowerShell in Araiza/s7**
 ```powershell
-kubectl --context minikube -n araiza-s7 scale deployment/araiza-s7 --replicas=4
-kubectl --context minikube -n araiza-s7 rollout status deployment/araiza-s7 --timeout=240s
-kubectl --context minikube -n araiza-s7 get pods -o wide
-$pod = kubectl --context minikube -n araiza-s7 get pods -l app=araiza-s7 -o 'jsonpath={.items[0].metadata.name}'
-kubectl --context minikube -n araiza-s7 delete pod $pod
-kubectl --context minikube -n araiza-s7 rollout status deployment/araiza-s7 --timeout=240s
-kubectl --context minikube -n araiza-s7 get pods -o wide
+kubectl --context minikube -n $ns scale deployment/$ns --replicas=4
+kubectl --context minikube -n $ns rollout status deployment/$ns --timeout=240s
+$pod = kubectl --context minikube -n $ns get pods -l "app=$ns" -o 'jsonpath={.items[0].metadata.name}'
+kubectl --context minikube -n $ns delete pod $pod
+kubectl --context minikube -n $ns rollout status deployment/$ns --timeout=240s
+kubectl --context minikube -n $ns get pods
 ```
 
-**PowerShell** Roll to the second image, then roll back. The build adds a visible revision label to the same upstream application. Reopen the forward after each rollout and check `http://127.0.0.1:8317/revision/index.txt` for `v2` and then `v1`.
+For troubleshooting, set `$pod` to the current failing Pod name from `get pods`.
 
+**Expected** The Java app opens and 4 Pods become Ready with a new Pod name after deletion.
+
+### Nagios
+
+Start Nagios with the checks supplied in [lab.cfg](nagios/lab.cfg). This also starts the services used in Q4.
+**PowerShell in Araiza/s7**
 ```powershell
-docker build --target app --build-arg LAB_REVISION=v2 -t araiza-s7:v2 .
-minikube image load araiza-s7:v2
-kubectl --context minikube -n araiza-s7 set image deployment/araiza-s7 web=araiza-s7:v2
-kubectl --context minikube -n araiza-s7 rollout status deployment/araiza-s7 --timeout=240s
-kubectl --context minikube -n araiza-s7 rollout history deployment/araiza-s7
+docker compose -f compose.yaml -f nagios/compose.yaml --profile monitoring up -d --build --wait --wait-timeout 180
+docker compose -f compose.yaml -f nagios/compose.yaml --profile monitoring exec -T nagios /opt/nagios/bin/nagios -v /opt/nagios/etc/nagios.cfg
+(Get-Content .env | Select-String '^NAGIOS_PASSWORD=').Line.Split('=', 2)[1]
 ```
 
-```powershell
-kubectl --context minikube -n araiza-s7 rollout undo deployment/araiza-s7
-kubectl --context minikube -n araiza-s7 rollout status deployment/araiza-s7 --timeout=240s
-```
+**Browser** Open [Nagios](http://127.0.0.1:8897/nagios/) as `nagiosadmin` with the password above. Under **Services**, show **Portal HTTP**, **Database TCP**, CPU, memory, disk and uptime. WARNING / CRITICAL are 75% / 90% for CPU and memory, 80% / 95% disk, under 120s / 30s uptime, and 1s / 3s HTTP response time.
 
-**Troubleshooting** Replace a failing image with the correct loaded tag. Check startup logs and last termination reason for a crashing Pod. In a Pending Pod's events look for scheduling errors and resource shortages.
-
-```powershell
-$pod = kubectl --context minikube -n araiza-s7 get pods -l app=araiza-s7 -o 'jsonpath={.items[0].metadata.name}'
-kubectl --context minikube -n araiza-s7 describe pod $pod
-kubectl --context minikube -n araiza-s7 logs $pod -c web --tail=60
-kubectl --context minikube -n araiza-s7 logs $pod -c web --previous
-kubectl --context minikube -n araiza-s7 get events --sort-by=.lastTimestamp
-```
-
-### Nagios monitoring
-
-The [Compose overlay](nagios/compose.yaml) applies [host and service definitions](nagios/lab.cfg) for the portal, database TCP port and Docker Linux metrics. The monitoring overlay runs a separate assigned-WAR Tomcat instance for its own HTTP check. Flask readiness checks both PostgreSQL and Redis. The unprivileged [metrics agent](nagios/metrics.py) reads Linux CPU, memory, disk and uptime. On Docker Desktop these are metrics from the Docker Linux VM and its filesystem. No Docker socket or privileged container is needed.
-
-**PowerShell** Build the Java image and start the monitoring services. For WordPress, complete first-run browser setup before testing the portal.
-
-```powershell
-./scripts/setup.ps1
-docker compose -f compose.yaml -f nagios/compose.yaml --profile monitoring pull nagios metrics
-docker compose -f compose.yaml -f nagios/compose.yaml --profile monitoring up -d --build
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios /opt/nagios/bin/nagios -v /opt/nagios/etc/nagios.cfg
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios sv status nagios
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios python3 /opt/lab/check_lab.py http proxy 80 / 1 3
-```
-
-**Browser** Open `http://127.0.0.1:8897/nagios/`. Use `nagiosadmin` and the password in your local `.env`. Check **Hosts**, **Services** and **Alert History**. CPU and memory use 75% WARNING and 90% CRITICAL. Disk uses 80%/95% used. Uptime warns below 120s and is critical below 30s. HTTP warns at 1s, becomes critical at 3s or on an error status. The dashboard and alert history record state changes. Outbound email is disabled.
-
-**PowerShell** Test both threshold exits using actual sampled CPU data, without running a load generator. Expect return codes 1 and 2.
-
-```powershell
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios python3 /opt/lab/check_lab.py metric metrics cpu 0 101
-$LASTEXITCODE
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios python3 /opt/lab/check_lab.py metric metrics cpu 0 0
-$LASTEXITCODE
-```
-
-**PowerShell and browser** Stop DB, wait for **Database TCP** to reach CRITICAL, restart and wait for OK. Repeat with web and **Portal HTTP**. Give Nagios 30–60 seconds to display the hard state before continuing.
-
+Run these lines individually. After each stop wait for CRITICAL (about a minute), then run its start and show recovery in **Alert History**.
+**PowerShell in Araiza/s7**
 ```powershell
 docker compose stop db
 docker compose start db
@@ -216,115 +161,72 @@ docker compose stop web
 docker compose start web
 ```
 
-If the website loads but Nagios reports no process, check `docker compose -f compose.yaml -f nagios/compose.yaml logs nagios` and the daemon status above. After editing the host definitions, validate before scheduling the change.
+**Expected** Nagios validates with zero errors and records CRITICAL → OK for the database and HTTP checks.
 
+**Scenario questions**
+
+**1. Your Pod keeps restarting repeatedly (CrashLoopBackOff). What will you do to troubleshoot this issue?**<br>In the first PowerShell, run `kubectl --context minikube -n $ns logs $pod -c web --previous` on the restarting Pod.<br><br>
+**2. A Kubernetes pod is stuck in a Pending state. What could be the possible reasons, and how would you troubleshoot it?**<br>Run `kubectl --context minikube -n $ns describe pod $pod` and check the events for resource or scheduling errors.<br><br>
+**3. You have a Kubernetes Deployment with multiple replicas, and some pods are failing health checks. How would you identify the root cause and fix it?**<br>Compare each Pod's logs and events with the probe path and port, then fix the failing configuration.<br><br>
+**4. You installed Nagios, but the web interface shows "Unable to connect to Nagios process". How do you resolve this?**<br>Run `docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios sv status nagios` from this set.<br><br>
+**5. You added a new host in Nagios, but it's not appearing on the web interface. How do you check and fix this?**<br>Check that the host file is mounted in `conf.d`, run the validation above, then restart the Nagios daemon.
+
+## Q4 — Docker Compose — Multi-Container Orchestration
+
+Run [Flask](flask/app.py) with PostgreSQL and Redis using [compose.yaml](compose.yaml) and the [Flask Dockerfile](flask/Dockerfile). Reuse the setup from Q3.
+**PowerShell in Araiza/s7**
 ```powershell
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios /opt/nagios/bin/nagios -v /opt/nagios/etc/nagios.cfg
-docker compose -f compose.yaml -f nagios/compose.yaml exec -T nagios sv restart nagios
-```
-
-## Question 4 — Flask, PostgreSQL and Redis
-
-[compose.yaml](compose.yaml) launches the [fixtures Flask service](flask/app.py), a private PostgreSQL database and Redis. [Dockerfile](flask/Dockerfile) installs the pinned [dependencies](flask/requirements.txt) and runs Gunicorn. [Database initialization](db/init-db.sh) creates the restricted role. Health checks gate startup. Flask performs `SELECT 1` and Redis `PING` for readiness, inserts fixtures in PostgreSQL and increments a Redis visit counter for reads. Nginx fronts web replicas on a single host port. Redis uses AOF on `s7-redis-data`, PostgreSQL uses `s7-db-data`.
-
-**PowerShell**
-```powershell
-./scripts/setup.ps1 -EnvOnly
-docker compose config --quiet
 docker compose up -d --build --wait --wait-timeout 180
 docker compose ps
 curl.exe -fsS http://127.0.0.1:8187/health
 curl.exe -fsS -d 'name=Saturday+Final' http://127.0.0.1:8187/fixtures
-curl.exe -fsS http://127.0.0.1:8187/fixtures
-curl.exe -fsS http://127.0.0.1:8187/fixtures
-docker compose exec -T redis redis-cli GET fixture-reads
 ```
 
-**Browser** Open `http://127.0.0.1:8187/`. Health returns PostgreSQL and Redis OK. The read response includes the saved fixture, the counter and the serving container hostname.
+**Browser** Open [http://127.0.0.1:8187/fixtures](http://127.0.0.1:8187/fixtures) twice and watch the Redis visit count increase.
 
-**PowerShell** Change the heading in [app.py](flask/app.py) for visible rebuild evidence. Compare IDs before and after rebuilding only web.
-
+Rebuild only web and compare the DB and Redis IDs, then scale behind the proxy.
+**PowerShell in Araiza/s7**
 ```powershell
 docker compose ps -q db redis
 docker compose up -d --no-deps --build web
 docker compose ps -q db redis
 docker compose up -d --no-deps --scale web=2 web
-docker compose ps web proxy
-1..8 | ForEach-Object { curl.exe -fsS http://127.0.0.1:8187/fixtures }
-docker compose down
-docker compose up -d --wait --wait-timeout 180
+docker compose ps web
+```
+
+Recreate PostgreSQL and Redis while keeping their volumes.
+**PowerShell in Araiza/s7**
+```powershell
+docker compose stop db redis
+docker compose rm -f db redis
+docker compose up -d --wait --wait-timeout 180 db redis
 curl.exe -fsS http://127.0.0.1:8187/fixtures
 docker compose exec -T redis redis-cli GET fixture-reads
 ```
 
-Expect unchanged DB and Redis IDs from the web-only rebuild, and both instance names after the proxy refreshes DNS. After down/up the fixture and Redis counter survive. For startup failures use `docker compose logs --tail=60 web db redis proxy`. For a conflicting host port, edit `WEB_PORT` in `.env` and apply again.
+**Expected** Both dependencies report OK, two web replicas run, and the fixture and Redis counter survive dependency replacement.
 
-## Scenario answers
+**Scenario questions**
 
-### Question 1
+**1. You have two applications—a Node.js backend and a Python script that handles scheduled jobs. Should you run multiple applications in the same Docker container?**<br>Use a backend service and a separate worker service so each can be deployed, stopped and scaled independently.<br><br>
+**2. You try to run two containers that both expose port 8080 on the host. What happens, and how can you run both apps?**<br>The second bind fails, so publish a different host port or use a reverse proxy.<br><br>
+**3. Your frontend has a new release, but you don’t want to restart the backend or DB containers. How can you update and rebuild only the frontend container?**<br>Run `docker compose up -d --no-deps --build web` and compare the DB and Redis container IDs.<br><br>
+**4. Tomcat is listening on port 8080, but you get a "Connection Refused" error in the browser. Why does this happen?**<br>Check `docker ps` and use the published host port to reach Tomcat's container listener.<br><br>
+**5. You're not sure which container is using port 3000. How do you check this on your host machine?**<br>Use `docker ps --filter publish=3000`, then `Get-NetTCPConnection -LocalPort 3000` to check a Windows host process.
 
-1. The Clean workspace stage calls `deleteDir()` before Git checkout.
-2. The `tool name: 'Maven3', type: 'maven'` step fails when no tool by that name is configured.
-3. In **Configure → Build Triggers**, select **GitHub hook trigger for GITScm polling** and use the push webhook. Disable periodic polling for a push-only job.
-4. `compile` compiles source in `target` and preserves prior output. `clean` deletes previous output.
-5. Poll SCM checks Git on a schedule. A webhook tells Jenkins to check when GitHub receives an event.
+## Troubleshooting and cleanup
 
-### Question 2
+- **Port busy** Run `Get-NetTCPConnection -State Listen -LocalPort 8080,8187,8317,8897 -ErrorAction SilentlyContinue`. For a Compose port conflict, change `WEB_PORT` or `NAGIOS_PORT` in your local `.env` and use that port in the browser.
+- **Container unhealthy** Run `docker compose logs --tail=40 web db`. For Jenkins errors, check **Console Output** and the names `JDK21` and `Maven3`.
 
-1. The script installs `sportssystem.war` as `/opt/araiza-s7-tomcat/webapps/ROOT.war`. Tomcat deploys files from `webapps` and names the context after the WAR.
-2. Check the request path, exact WAR name, permissions, and Tomcat deployment logs. With `ROOT.war` use `/` or `/schedule.jsp`.
-3. Associate an Elastic IP if Academy permits it. A normal public IP can change after stop/start.
-4. Provide controlled egress through a NAT gateway for a private subnet or an approved package mirror. In a public subnet use an internet gateway route and public IPv4.
-5. On Ubuntu run `sudo systemctl enable --now araiza-s7-tomcat` and confirm `systemctl is-enabled araiza-s7-tomcat`.
-
-### Question 3
-
-1. Use `kubectl --context minikube -n araiza-s7 describe pod POD` and `logs POD -c web --previous` with the same context and namespace. Verify startup errors, limits and probes.
-2. Check `describe pod` events for inadequate node resources, failed image placement, taints or unsatisfied scheduling rules.
-3. Compare probe path and port, application logs and each Pod's events. Correct the manifest or app and watch the new rollout.
-4. Run the monitoring daemon status and Nagios config checks above. Investigate the container logs and restart Nagios after repair.
-5. Confirm the file is mounted in `conf.d`, validate with `nagios -v` as above, restart the daemon and refresh Hosts.
-
-### Question 4
-
-1. Use a backend service and a separate worker service so each can be deployed, stopped and scaled independently.
-2. A second bind to the same host address and port fails. Publish distinct host ports or put both apps behind a reverse proxy.
-3. Run `docker compose up -d --no-deps --build web` and compare the DB and Redis container IDs.
-4. A container listener needs a host port mapping and the browser must use the mapped port. Check `docker ps`, logs and local curl.
-5. Use `docker ps --filter publish=3000`, then `Get-NetTCPConnection -LocalPort 3000` to check a Windows host process.
-
-## Common failures and fixes
-
-- **Port in use.** In PowerShell, run `Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 8080,8187,8897,8317 }`. Identify the PID with `Get-Process -Id PID` after replacing PID. For Docker use `docker ps --format "table {{.Names}}	{{.Ports}}"`. On macOS use `lsof -nP -iTCP -sTCP:LISTEN`. Change the matching local port in `.env` where permitted.
-- **Missing WAR.** Run `./scripts/setup.ps1 -FetchOnly` and `mvn -B -ntp -f app/upstream/pom.xml clean test package`. Expect `app/upstream/target/sportssystem.war`. For failed dependency resolution use `mvn -U -e -f app/upstream/pom.xml clean package` and inspect the failing repository or proxy.
-- **Engine inactive.** Check `docker context ls` and `docker version`. Wait for the Linux engine. Check permission under the Jenkins agent user separately.
-- **Database unhealthy.** Run `docker compose ps` and `docker compose logs --tail=80 web db`. Initialization uses credentials from the first boot of the named volume. Restore the original `.env` or rotate the database account explicitly.
-- **No Nagios status.** Verify daemon status and config, then wait for the next active check. Include both Compose files when inspecting monitoring.
-
-## Verify and clean up
-
-**PowerShell** Run `./scripts/setup.ps1` first. Verification inserts one synthetic record through HTTP.
-
+Stop the port-forward with Ctrl+C. The cleanup command keeps your data volumes.
+**PowerShell in Araiza/s7**
 ```powershell
-./scripts/verify.ps1 -RecreateDatabase -Kubernetes
+.\scripts\cleanup.ps1 -Kubernetes
 ```
 
-Omit `-RecreateDatabase` to avoid restarting the DB. Omit `-Kubernetes` to skip its checks. For Kubernetes only use `./k8s/verify.ps1`. The script validates endpoint selection, root and detail HTTP, scaling, Pod replacement, update and rollback through port-forward.
+End the AWS lab and stop or terminate your EC2 instance when done.
 
-Once finished, stop port-forwards with Ctrl+C and remove this set's Compose containers and Kubernetes namespace.
+### macOS startup
 
-```powershell
-./scripts/cleanup.ps1 -Kubernetes
-```
-
-On macOS use `pwsh -File scripts/cleanup.ps1 -Kubernetes`. Cleanup leaves the database volumes, WordPress files, Redis data and `.env` wherever present. Stop any webhook tunnel and disable the practice webhook. In AWS, stop for later use or terminate the instance when evidence is saved. Release lab-only Elastic IPs and retained disks as allowed, then end the Academy lab.
-
-## Evidence checklist
-
-| Exercise | Capture |
-| --- | --- |
-| Containers Q4 | Working page and health, saved record before and after DB replacement plus Redis counter. |
-| Jenkins Q1 | Console phases, branch or trigger and archived `sportssystem.war`. |
-| Minikube Q3 | 2 and 4 Ready replicas, endpoints, a new Pod name and HTTP at v2 and restored v1. |
-| Nagios Q3 | Verified configuration, active HTTP and DB services, CPU/memory/disk/uptime, CRITICAL and recovery. |
-| EC2 Q2 | Public IPv4, matching inbound TCP 8080, local curl and external browser. |
+In Terminal, run `open -a Docker` and `brew services start jenkins-lts` if installed via Homebrew. Clone the same branch, use `cd Araiza/s7`, `bash scripts/setup.sh` and `curl`. The Docker, Minikube and kubectl commands are the same.
