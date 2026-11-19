@@ -1,0 +1,1 @@
+CREATE TABLE applications (reference VARCHAR(60) PRIMARY KEY, position VARCHAR(30) NOT NULL, resume VARCHAR(36) NOT NULL);

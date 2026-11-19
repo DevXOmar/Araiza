@@ -1,0 +1,24 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>edu.lab.araiza</groupId>
+  <artifactId>s3-companion</artifactId>
+  <version>1.0</version>
+  <packaging>war</packaging>
+  <properties>
+    <maven.compiler.release>8</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+  <dependencies>
+    <dependency><groupId>javax.servlet</groupId><artifactId>javax.servlet-api</artifactId><version>4.0.1</version><scope>provided</scope></dependency>
+    <dependency><groupId>com.mysql</groupId><artifactId>mysql-connector-j</artifactId><version>9.5.0</version></dependency>
+    <dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.13.2</version><scope>test</scope></dependency>
+  </dependencies>
+  <build>
+    <finalName>lab</finalName>
+    <plugins>
+      <plugin><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version></plugin>
+      <plugin><artifactId>maven-surefire-plugin</artifactId><version>3.3.1</version></plugin>
+      <plugin><artifactId>maven-war-plugin</artifactId><version>3.4.0</version></plugin>
+    </plugins>
+  </build>
+</project>

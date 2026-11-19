@@ -1,0 +1,10 @@
+**
+!app/
+!app/upstream/
+!app/upstream/pom.xml
+!app/upstream/src/
+!app/upstream/src/**
+!companion/
+!companion/pom.xml
+!companion/src/
+!companion/src/**

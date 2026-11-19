@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Appointments lab companion</title>
+<h1>Appointments</h1>
+<p>Separate lab companion. Enter synthetic data only.</p>
+<form method="post" action="records">
+    <label>Appointment reference <input name="reference" maxlength="60" required></label>
+    <label>Department <input name="department" placeholder="General" pattern="(Cardiology|General|Orthopedics)" required></label>
+    <button>Save</button>
+</form>
+<p><a href="records">Read saved records</a> · <a href="health">Check database</a> · <a href="../">Original Java app</a></p>
+</html>

@@ -1,0 +1,20 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>edu.lab.araiza</groupId>
+  <artifactId>s1-ticket-ci</artifactId>
+  <version>1.0</version>
+  <packaging>jar</packaging>
+  <properties>
+    <maven.compiler.release>8</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+  <dependencies>
+    <dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.13.2</version><scope>test</scope></dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version></plugin>
+      <plugin><artifactId>maven-surefire-plugin</artifactId><version>3.3.1</version></plugin>
+    </plugins>
+  </build>
+</project>
