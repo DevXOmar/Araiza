@@ -1,0 +1,72 @@
+properties([
+    disableConcurrentBuilds(),
+    parameters([
+        string(name: 'SOURCE_URL', defaultValue: 'https://github.com/sarasrija/ApartmentSystem.git', description: 'Use your fork for push-trigger tests'),
+        string(name: 'SOURCE_BRANCH', defaultValue: 'main', description: 'Git branch only, without refs/heads/'),
+        booleanParam(name: 'DEPLOY_LOCAL', defaultValue: true, description: 'Deploy to the named local Tomcat container')
+    ])
+])
+
+node {
+    def repo = params.SOURCE_URL
+    def branch = params.SOURCE_BRANCH
+    def sourceDir = 'source'
+    if (!(sourceDir ==~ /[A-Za-z0-9][A-Za-z0-9_-]*/)) {
+        error('Choose a single relative checkout folder name.')
+    }
+    echo "Build #${env.BUILD_NUMBER}"
+    stage('Clean workspace') {
+        deleteDir()
+    }
+    stage('Checkout application') {
+        dir(sourceDir) {
+            git branch: branch, url: repo
+        }
+    }
+
+    def mavenHome = tool name: 'Maven3', type: 'maven'
+    def javaHome = tool name: 'JDK21', type: 'jdk'
+    withEnv(["JAVA_HOME=${javaHome}", "PATH+JAVA=${javaHome}/bin", "PATH+MAVEN=${mavenHome}/bin"]) {
+        def mvn = { goals ->
+            if (isUnix()) {
+                sh "mvn -B -ntp ${goals}"
+            } else {
+                bat "mvn -B -ntp ${goals}"
+            }
+        }
+
+        stage('Maven build, test and package') {
+            dir(sourceDir) {
+                mvn('clean test package')
+            }
+        }
+
+    }
+    stage('Archive WAR') {
+        archiveArtifacts artifacts: "${sourceDir}/target/apartmentsystem.war", fingerprint: true
+    }
+
+    if (params.DEPLOY_LOCAL) {
+        stage('Deploy ROOT WAR to Tomcat') {
+            if (isUnix()) {
+                sh '''
+                    set -eu
+                    docker exec s9-jenkins-tomcat mkdir -p /tmp/deploy
+                    docker cp source/target/apartmentsystem.war s9-jenkins-tomcat:/tmp/deploy/ROOT.war
+                    docker exec s9-jenkins-tomcat sh -c 'mv /tmp/deploy/ROOT.war /usr/local/tomcat/webapps/ROOT.war'
+                    docker restart s9-jenkins-tomcat
+                    docker exec s9-jenkins-tomcat curl -fsS --retry 15 --retry-all-errors --retry-delay 2 http://127.0.0.1:8080/
+                '''
+            } else {
+                bat '''
+                    @echo off
+                    docker exec s9-jenkins-tomcat mkdir -p /tmp/deploy || exit /b 1
+                    docker cp source/target/apartmentsystem.war s9-jenkins-tomcat:/tmp/deploy/ROOT.war || exit /b 1
+                    docker exec s9-jenkins-tomcat sh -c "mv /tmp/deploy/ROOT.war /usr/local/tomcat/webapps/ROOT.war" || exit /b 1
+                    docker restart s9-jenkins-tomcat || exit /b 1
+                    docker exec s9-jenkins-tomcat curl -fsS --retry 15 --retry-all-errors --retry-delay 2 http://127.0.0.1:8080/
+                '''
+            }
+        }
+    }
+}

@@ -1,0 +1,77 @@
+name: araiza-s7
+services:
+  db:
+    image: araiza-s7-postgres:15
+    build: ./db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sports
+      POSTGRES_USER: lab_admin
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD:?Run scripts/setup first}
+      LAB_DB_USER: sports_app
+      LAB_DB_PASSWORD: ${DB_PASSWORD:?Run scripts/setup first}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          PGPASSWORD="$$LAB_DB_PASSWORD" psql -h 127.0.0.1 -U "$$LAB_DB_USER" -d "$$POSTGRES_DB" -Atqc 'SELECT 1'
+      interval: 5s
+      timeout: 4s
+      retries: 24
+      start_period: 30s
+    networks: [data]
+  web:
+    image: araiza-s7-compose:local
+    build: ./flask
+    environment:
+      DB_HOST: db
+      DB_NAME: sports
+      DB_USER: sports_app
+      DB_PASSWORD: ${DB_PASSWORD:?Run scripts/setup first}
+      REDIS_URL: redis://redis:6379/0
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [edge, data]
+  proxy:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports: ["127.0.0.1:${WEB_PORT}:80"]
+    volumes:
+      - ./proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [edge]
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [data]
+networks:
+  edge:
+    name: s7-net
+  data:
+    name: s7-data-net
+    internal: true
+volumes:
+  db-data:
+    name: s7-db-data
+  redis-data:
+    name: s7-redis-data

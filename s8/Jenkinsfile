@@ -1,0 +1,66 @@
+properties([
+    disableConcurrentBuilds(),
+    parameters([
+        string(name: 'SOURCE_URL', defaultValue: 'https://github.com/sarasrija/BloodBanksystem.git', description: 'Use your fork for push-trigger tests'),
+        string(name: 'SOURCE_BRANCH', defaultValue: 'main', description: 'Git branch only, without refs/heads/'),
+        string(name: 'SOURCE_DIR', defaultValue: 'bloodbankapp', description: 'Relative checkout folder')
+    ])
+])
+
+node {
+    def repo = params.SOURCE_URL
+    def branch = params.SOURCE_BRANCH
+    def sourceDir = params.SOURCE_DIR
+    if (!(sourceDir ==~ /[A-Za-z0-9][A-Za-z0-9_-]*/)) {
+        error('Choose a single relative checkout folder name.')
+    }
+    echo "Build #${env.BUILD_NUMBER}"
+    stage('Clean workspace') {
+        deleteDir()
+    }
+    stage('Checkout application') {
+        dir(sourceDir) {
+            git branch: branch, url: repo
+        }
+    }
+
+    def mavenHome = tool name: 'Maven3', type: 'maven'
+    def javaHome = tool name: 'JDK21', type: 'jdk'
+    withEnv(["JAVA_HOME=${javaHome}", "PATH+JAVA=${javaHome}/bin", "PATH+MAVEN=${mavenHome}/bin"]) {
+        def mvn = { goals ->
+            if (isUnix()) {
+                sh "mvn -B -ntp ${goals}"
+            } else {
+                bat "mvn -B -ntp ${goals}"
+            }
+        }
+
+        stage('Clean') {
+            dir(sourceDir) {
+                mvn('clean')
+            }
+        }
+
+        stage('Install') {
+            dir(sourceDir) {
+                mvn('install')
+            }
+        }
+
+        stage('Test') {
+            dir(sourceDir) {
+                mvn('test')
+            }
+        }
+
+        stage('Package') {
+            dir(sourceDir) {
+                mvn('package')
+            }
+        }
+
+    }
+    stage('Archive WAR') {
+        archiveArtifacts artifacts: "${sourceDir}/target/bloodbank.war", fingerprint: true
+    }
+}

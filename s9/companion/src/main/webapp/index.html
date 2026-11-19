@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Apartment maintenance lab companion</title>
+<h1>Apartment maintenance</h1>
+<p>Separate lab companion. Enter synthetic data only.</p>
+<form method="post" action="records">
+    <label>Maintenance request reference <input name="reference" maxlength="60" required></label>
+    <label>Unit <input name="unit" placeholder="B-12" pattern="[A-Z]-[1-9][0-9]{0,2}" required></label>
+    <button>Save</button>
+</form>
+<p><a href="records">Read saved records</a> · <a href="health">Check database</a> · <a href="../">Original Java app</a></p>
+</html>

@@ -1,0 +1,54 @@
+name: araiza-s9
+services:
+  db:
+    image: araiza-s9-postgres:15
+    build: ./db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: apartment
+      POSTGRES_USER: lab_admin
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD:?Run scripts/setup first}
+      LAB_DB_USER: apartment_app
+      LAB_DB_PASSWORD: ${DB_PASSWORD:?Run scripts/setup first}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          PGPASSWORD="$$LAB_DB_PASSWORD" psql -h 127.0.0.1 -U "$$LAB_DB_USER" -d "$$POSTGRES_DB" -Atqc 'SELECT 1'
+      interval: 5s
+      timeout: 4s
+      retries: 24
+      start_period: 30s
+    networks: [data]
+  web:
+    image: araiza-s9-compose:local
+    build:
+      context: .
+      target: with-db
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/apartment?connectTimeout=3&socketTimeout=5
+      DB_USER: apartment_app
+      DB_PASSWORD: ${DB_PASSWORD:?Run scripts/setup first}
+      JAVA_OPTS: "-Xms32m -Xmx192m"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/lab/health"]
+      interval: 5s
+      timeout: 6s
+      retries: 18
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["127.0.0.1:${WEB_PORT}:8080"]
+    networks: [edge, data]
+networks:
+  edge:
+    name: s9-net
+  data:
+    name: s9-data-net
+    internal: true
+volumes:
+  db-data:
+    name: s9-db-data
